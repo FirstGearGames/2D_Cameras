@@ -273,7 +273,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _targetTransform: {fileID: 775721936}
-  _horizontalFollowRate: 2
+  _horizontalFollowRate: 3
+  _horizontalCatchUpRate: 7
   _horizontalFloatingWidth: 1.25
   _verticalViewportBounds:
     Minimum: 0.25

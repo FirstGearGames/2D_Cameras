@@ -179,7 +179,8 @@ namespace UnityEditor
 
 				if (go != null)
 				{
-					Object prefab = PrefabUtility.GetCorrespondingObjectFromSource(go);
+                    //Object prefab = PrefabUtility.GetCorrespondingObjectFromSource(go);
+                    Object prefab = null;
 
 					if (prefab)
 					{
