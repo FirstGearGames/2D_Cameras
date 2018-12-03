@@ -1,7 +1,7 @@
 ﻿using UnityEngine;
 
 [RequireComponent(typeof(Camera))]
-public class SuperMarioBrosCamera : MonoBehaviour
+public class MultidirectionalLeadingCamera : MonoBehaviour
 {
     #region Serialized.
     /// <summary>
@@ -44,7 +44,7 @@ public class SuperMarioBrosCamera : MonoBehaviour
 
     #region Private.
     /// <summary>
-    /// Last position of the target from last frames calculations This value is set after the camera has moved.
+    /// Last position of the target from last frames calculations.
     /// </summary>
     private Vector3 _lastTargetPosition = Vector3.zero;
     /// <summary>
@@ -68,7 +68,6 @@ public class SuperMarioBrosCamera : MonoBehaviour
     /// </summary>
     private Camera _camera;
     #endregion
-
 
 
     private void Awake()
@@ -182,8 +181,6 @@ public class SuperMarioBrosCamera : MonoBehaviour
 
         transform.position = new Vector3(nextX, goal.y, goal.z);
     }
-
-    private float _lastX;
 
     /// <summary>
     /// Sets FloatingBounds using specified data.
