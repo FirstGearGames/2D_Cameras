@@ -5,90 +5,87 @@ public class MultidirectionalLeadingCamera : MonoBehaviour
 {
     #region Serialized.
     /// <summary>
-    /// Target transform to follow.
+    /// Reference to the player's transform.
     /// </summary>
-    [Tooltip("Target transform to follow.")]
     [SerializeField]
     private Transform _targetTransform;
     /// <summary>
-    /// Amount of distance the unit can travel in an opposite direction before the camera changes direction.
+    /// Minimum and Maximum values the target must exceed within viewport space before this transform follows the target vertically.
     /// </summary>
-    [Tooltip("Amount of distance the unit can travel in an opposite direction before the camera changes direction.")]
+    [SerializeField]
+    private FloatRange _verticalViewportBounds = new FloatRange(0.25f, 0.65f);
+    /// <summary>
+    /// Distance player can travel from center point for horizontal floating bounds.
+    /// </summary>
     [SerializeField]
     private float _horizontalFloatingWidth = 1.5f;
     /// <summary>
-    /// Vertical area of the viewport which the target must past before the camera will move vertically.
+    /// Distance to travel past the target in the target's moving direction.
     /// </summary>
-    [Tooltip("Vertical area of the viewport which the target must past before the camera will move vertically.")]
     [SerializeField]
-    private FloatRange _verticalViewportBounds = new FloatRange(0.25f, 0.75f);
+    private float _horizontalOvershoot = 1.5f;
     /// <summary>
-    /// Distance to offset the camera from the horizontal center of the target in either direction.
+    /// True to stop the camera horizontal movement when the target's horizontal direction changes.
     /// </summary>
-    [Tooltip("Distance to offset the camera from the horizontal center of the target in either direction.")]
     [SerializeField]
-    private float _horizontalOvershoot = 1;
+    private bool _stopHorizontalMovementOnDirectionChange = true;
 
     [Header("Smoothing")]
     /// <summary>
     /// Default time to smooth damp to target position.
     /// </summary>
-    [Tooltip("Default time to smooth damp to target position.")]
     [SerializeField]
     private float _smoothTimeBase = 0.5f;
     /// <summary>
-    /// Lowest value smooth time may reach. Useful for always keep the transform slightly behind target for more fluid movement.
+    /// Lowest value smooth time may reach.
     /// </summary>
-    [Tooltip("Lowest value smooth time may reach. Useful for always keep the transform slightly behind target for more fluid movement.")]
     [SerializeField]
     private float _minimumSmoothTime = 0.05f;
     /// <summary>
     /// How quickly to decrease smooth time from SmoothTimeBase.
     /// </summary>
-    [Tooltip("How quickly to decrease smooth time from SmoothTimeBase.")]
     [SerializeField]
     [Range(0.01f, 1f)]
-    private float _smoothDecreaseRate = 0.15f;
+    private float _smoothDecreaseRate = 0.25f;
     #endregion
 
     #region Private.
     /// <summary>
-    /// Position of the target from last frames calculations.
-    /// </summary>
-    private Vector3 _lastTargetPosition = Vector3.zero;
-    /// <summary>
-    ///Horizontal direction of the target from last frames calculations.
-    /// </summary>
-    private float _lastHorizontalDirection = 0f;
-    /// <summary>
-    /// Position where the camera should move towards.
-    /// </summary>
-    private Vector3 _cameraGoal;
-    /// <summary>
-    /// If not null the target must move outside this area in world space horizontal before the camera begans to move as well.
-    /// </summary>
-    private FloatRange _floatingBounds = null;
-    /// <summary>
-    /// Camera component on this game object.
+    /// Reference to the camera on this gameObject.
     /// </summary>
     private Camera _camera;
     /// <summary>
-    /// Last x value of this tranform. Used to SmoothDamp movement.
+    /// Position of the target after last frames calculations.
     /// </summary>
-    private float _lastTransformX = 0f;
+    private Vector3 _lastTargetPosition;
     /// <summary>
-    /// Current time to smooth damp to target position. This value decreases as the target moves in the same direction.
+    /// Bounds where the target can move freely horizontally without the camera moving.
     /// </summary>
-    private float _currentSmoothTime = 0f;
+    private FloatRange _horizontalFloatingBounds = null;
+    /// <summary>
+    /// Direction of the target after last frames calculations.
+    /// </summary>
+    private float _lastHorizontalDirection;
+    /// <summary>
+    /// Time to SmoothDamp this transform to the target's position.
+    /// </summary>
+    private float _currentSmoothTime;
+    /// <summary>
+    /// Destination for this transform to move towards.
+    /// </summary>
+    private Vector3 _cameraGoal;
+    /// <summary>
+    /// X position of this transform after last frames calculations.
+    /// </summary>
+    private float _lastTransformX;
     #endregion
-
 
     private void Awake()
     {
         _camera = GetComponent<Camera>();
-        //Center on the target.
         transform.position = new Vector3(_targetTransform.position.x, _targetTransform.position.y, transform.position.z);
-        ResetSmoothTime();
+        _cameraGoal = transform.position;
+        _currentSmoothTime = _smoothTimeBase;
     }
 
     private void LateUpdate()
@@ -96,84 +93,86 @@ public class MultidirectionalLeadingCamera : MonoBehaviour
         FollowTarget();
     }
 
+    /// <summary>
+    /// Sets CameraGoal and issues this transform to move to the goal.
+    /// </summary>
     private void FollowTarget()
     {
-        //No target.
         if (_targetTransform == null)
             return;
 
         if (_targetTransform.position != _lastTargetPosition)
         {
-            //Raw direction in which the target transform has moved on X/Y.
+            float goalX, goalY;
             float horizontalDirection = Mathf.Sign(_targetTransform.position.x - _lastTargetPosition.x);
 
-            float goalX;
-            //If there are no floating bounds check if one needs to be applied.
-            if (_floatingBounds == null)
+            //Currently no horizontal floating bounds.
+            if (_horizontalFloatingBounds == null)
             {
-                //If target direction has changed on X.
+                //If direction has changed make new floating bounds.
                 if (horizontalDirection != _lastHorizontalDirection)
+                    SetHorizontalFloatingBounds(_targetTransform.position.x, horizontalDirection);
+            }
+            //There is a floating bounds.
+            else
+            {
+                //If target is outside the bounds then nullify floating bounds.
+                if (_targetTransform.position.x < _horizontalFloatingBounds.Minimum || _targetTransform.position.x > _horizontalFloatingBounds.Maximum)
                 {
-                    SetFloatingBounds(_targetTransform.position.x, horizontalDirection);
-                    //Reset the multiplier as direction has changed.
+                    _horizontalFloatingBounds = null;
+                    //Reset smoothing time as well.
                     _currentSmoothTime = _smoothTimeBase;
                 }
             }
-            //FloatingBounds exist, check if it needs to be broken.
+            //Set goalX.
+            if (_horizontalFloatingBounds == null)
+            {
+                goalX = _targetTransform.position.x + (_horizontalOvershoot * horizontalDirection);
+            }
             else
             {
-                //If outside either bounds horizontally.
-                if (_targetTransform.position.x < _floatingBounds.Minimum || _targetTransform.position.x > _floatingBounds.Maximum)
-                    _floatingBounds = null;
+                if (_stopHorizontalMovementOnDirectionChange)
+                    goalX = transform.position.x;
+                else
+                    goalX = _cameraGoal.x;
             }
-            //If floating bounds wasn't set update camera to target position with overshoot and target velocity.
-            if (_floatingBounds == null)
-                goalX = _targetTransform.position.x + (_horizontalOvershoot * horizontalDirection);
-            else
-                goalX = transform.position.x;
 
-
-            float goalY;
-            //Where the target is within the main cameras viewport.
-            Vector2 targetViewportPosition = Camera.main.WorldToViewportPoint(_targetTransform.position);
-            //Becomes true if this transform needs to move vertically to keep up with the target.
+            //Where the target is within the viewport.
+            Vector2 targetViewportPosition = _camera.WorldToViewportPoint(_targetTransform.position);
+            //Becomes true if this transform needs to follow the target vertically.
             bool moveVertically = (targetViewportPosition.y < _verticalViewportBounds.Minimum || targetViewportPosition.y > _verticalViewportBounds.Maximum);
-            //If the camera needs to move vertically to keep the target within vertical bounds.
+            //If this transform needs to move
             if (moveVertically)
             {
-                float requiredPixels;
+                float requiredUnits;
                 float cameraHeight = _camera.orthographicSize * 2f;
-                //If the target is going up.
-                if (targetViewportPosition.y > 0.5f)
-                    requiredPixels = (targetViewportPosition.y - _verticalViewportBounds.Maximum) * cameraHeight;
-                //If the target is going down.
+                //If target is going up.
+                if (targetViewportPosition.y >= _verticalViewportBounds.Maximum)
+                    requiredUnits = (targetViewportPosition.y - _verticalViewportBounds.Maximum) * cameraHeight;
                 else
-                    requiredPixels = (_verticalViewportBounds.Minimum - targetViewportPosition.y) * -cameraHeight;
+                    requiredUnits = (_verticalViewportBounds.Minimum - targetViewportPosition.y) * -cameraHeight;
 
-                goalY = transform.position.y + requiredPixels;
+                goalY = transform.position.y + requiredUnits;
             }
-            //Target is within bounds, no need to move camera.
+            //Don't need to move vertically.
             else
             {
-                //Use current camera goal on y.
                 goalY = _cameraGoal.y;
             }
 
-            //Build camera goal using created values.            
             _cameraGoal = new Vector3(goalX, goalY, transform.position.z);
-            //Update last direction and target position.
+            //Update the "_last" variables.
             _lastHorizontalDirection = horizontalDirection;
             _lastTargetPosition = _targetTransform.position;
         }
 
-        //Move to the camera goal.
         MoveToGoal(_cameraGoal);
     }
 
-
     /// <summary>
-    /// Moves to MoveGoalX and MoveGoalY.
+    /// Moves to the specified goal smoothly.
     /// </summary>
+    /// <param name="goal"></param>
     private void MoveToGoal(Vector3 goal)
     {
         if (transform.position == goal)
@@ -181,48 +180,19 @@ public class MultidirectionalLeadingCamera : MonoBehaviour
 
         float nextX = Mathf.SmoothDamp(transform.position.x, goal.x, ref _lastTransformX, _currentSmoothTime);
         transform.position = new Vector3(nextX, goal.y, goal.z);
-        //Reduce smooth time.
+        //Reduce smoothing time.
         _currentSmoothTime = Mathf.Max(_currentSmoothTime - (Time.deltaTime * _smoothDecreaseRate), _minimumSmoothTime);
     }
 
     /// <summary>
-    /// Sets the CurrentSmoothTime to the SmoothTimeBase.
-    /// </summary>
-    private void ResetSmoothTime()
-    {
-        _currentSmoothTime = _smoothTimeBase;
-        _lastTransformX = transform.position.x;
-    }
-
-    private float CubicEase(float percent)
-    {
-        /* If either of these values result will always be 
-         * the passed in value. */
-        if (percent == 0 || percent == 1)
-            return percent;
-
-        if (percent < 0.5f)
-        {
-            return percent;
-            //return percent * percent * percent * 0.5f;// Cubic equation then scale down to half size
-        }
-        else
-        {
-            return percent * percent * percent * 0.5f + 0.5f;// Same as above but inverted and shifted 
-        }
-    }
-
-    /// <summary>
-    /// Sets FloatingBounds using specified data.
+    /// Creates a horizontal floating bounds.
     /// </summary>
     /// <param name="targetX"></param>
     /// <param name="targetDirection"></param>
-    private void SetFloatingBounds(float targetX, float targetDirection)
+    private void SetHorizontalFloatingBounds(float targetX, float targetDirection)
     {
         float halfFloatingWidth = _horizontalFloatingWidth / 2f;
         float middle = targetX + (targetDirection * halfFloatingWidth);
-        _floatingBounds = new FloatRange(middle - halfFloatingWidth, middle + halfFloatingWidth);
+        _horizontalFloatingBounds = new FloatRange(middle - halfFloatingWidth, middle + halfFloatingWidth);
     }
-
-
 }

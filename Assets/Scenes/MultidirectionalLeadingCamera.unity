@@ -269,15 +269,16 @@ MonoBehaviour:
   m_GameObject: {fileID: 519420028}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 238b46ac14a2f3b4ea1f1c3369f11cd5, type: 3}
+  m_Script: {fileID: 11500000, guid: 79c0a2346e55dbf4c9f40bcd8f4645ad, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   _targetTransform: {fileID: 775721936}
-  _horizontalFloatingWidth: 1.25
   _verticalViewportBounds:
     Minimum: 0.25
-    Maximum: 0.75
-  _horizontalOvershoot: 2
+    Maximum: 0.65
+  _horizontalFloatingWidth: 1.5
+  _horizontalOvershoot: 1.5
+  _stopHorizontalMovementOnDirectionChange: 1
   _smoothTimeBase: 0.5
   _minimumSmoothTime: 0.05
   _smoothDecreaseRate: 0.25
