@@ -11,18 +11,6 @@ public class MultidirectionalLeadingCamera : MonoBehaviour
     [SerializeField]
     private Transform _targetTransform;
     /// <summary>
-    /// How quickly to follow Target horizontally.
-    /// </summary>
-    [Tooltip("How quickly to follow Target horizontally.")]
-    [SerializeField]
-    private float _horizontalFollowRate = 3f;
-    /// <summary>
-    /// How quickly to catch up to the target when moving in a constant horizontal direction.
-    /// </summary>
-    [Tooltip("How quickly to catch up to the target when moving in a constant horizontal direction.")]
-    [SerializeField]
-    private float _horizontalCatchUpRate = 7f;
-    /// <summary>
     /// Amount of distance the unit can travel in an opposite direction before the camera changes direction.
     /// </summary>
     [Tooltip("Amount of distance the unit can travel in an opposite direction before the camera changes direction.")]
@@ -40,21 +28,38 @@ public class MultidirectionalLeadingCamera : MonoBehaviour
     [Tooltip("Distance to offset the camera from the horizontal center of the target in either direction.")]
     [SerializeField]
     private float _horizontalOvershoot = 1;
+
+    [Header("Smoothing")]
+    /// <summary>
+    /// Default time to smooth damp to target position.
+    /// </summary>
+    [Tooltip("Default time to smooth damp to target position.")]
+    [SerializeField]
+    private float _smoothTimeBase = 0.5f;
+    /// <summary>
+    /// Lowest value smooth time may reach. Useful for always keep the transform slightly behind target for more fluid movement.
+    /// </summary>
+    [Tooltip("Lowest value smooth time may reach. Useful for always keep the transform slightly behind target for more fluid movement.")]
+    [SerializeField]
+    private float _minimumSmoothTime = 0.05f;
+    /// <summary>
+    /// How quickly to decrease smooth time from SmoothTimeBase.
+    /// </summary>
+    [Tooltip("How quickly to decrease smooth time from SmoothTimeBase.")]
+    [SerializeField]
+    [Range(0.01f, 1f)]
+    private float _smoothDecreaseRate = 0.15f;
     #endregion
 
     #region Private.
     /// <summary>
-    /// Last position of the target from last frames calculations.
+    /// Position of the target from last frames calculations.
     /// </summary>
     private Vector3 _lastTargetPosition = Vector3.zero;
     /// <summary>
-    /// Last direction of the target from last frames calculations.
+    ///Horizontal direction of the target from last frames calculations.
     /// </summary>
-    private Vector2 _lastTargetDirection = Vector2.zero;
-    /// <summary>
-    /// Rate in which to catch up to the target. Increases with prolonged movement in the same direction.
-    /// </summary>
-    private float _catchUpMultiplier = 1f;
+    private float _lastHorizontalDirection = 0f;
     /// <summary>
     /// Position where the camera should move towards.
     /// </summary>
@@ -67,6 +72,14 @@ public class MultidirectionalLeadingCamera : MonoBehaviour
     /// Camera component on this game object.
     /// </summary>
     private Camera _camera;
+    /// <summary>
+    /// Last x value of this tranform. Used to SmoothDamp movement.
+    /// </summary>
+    private float _lastTransformX = 0f;
+    /// <summary>
+    /// Current time to smooth damp to target position. This value decreases as the target moves in the same direction.
+    /// </summary>
+    private float _currentSmoothTime = 0f;
     #endregion
 
 
@@ -75,6 +88,7 @@ public class MultidirectionalLeadingCamera : MonoBehaviour
         _camera = GetComponent<Camera>();
         //Center on the target.
         transform.position = new Vector3(_targetTransform.position.x, _targetTransform.position.y, transform.position.z);
+        ResetSmoothTime();
     }
 
     private void LateUpdate()
@@ -91,26 +105,18 @@ public class MultidirectionalLeadingCamera : MonoBehaviour
         if (_targetTransform.position != _lastTargetPosition)
         {
             //Raw direction in which the target transform has moved on X/Y.
-            Vector2 direction = new Vector2(
-                Mathf.Sign(_targetTransform.position.x - _lastTargetPosition.x),
-                Mathf.Sign(_targetTransform.position.y - _lastTargetPosition.y)
-                );
+            float horizontalDirection = Mathf.Sign(_targetTransform.position.x - _lastTargetPosition.x);
 
             float goalX;
             //If there are no floating bounds check if one needs to be applied.
             if (_floatingBounds == null)
             {
                 //If target direction has changed on X.
-                if (direction.x != _lastTargetDirection.x)
+                if (horizontalDirection != _lastHorizontalDirection)
                 {
-                    SetFloatingBounds(_targetTransform.position.x, direction.x);
+                    SetFloatingBounds(_targetTransform.position.x, horizontalDirection);
                     //Reset the multiplier as direction has changed.
-                    _catchUpMultiplier = 1f;
-                }
-                //Same direction.
-                else
-                {
-                    _catchUpMultiplier += (_horizontalCatchUpRate * Time.deltaTime);
+                    _currentSmoothTime = _smoothTimeBase;
                 }
             }
             //FloatingBounds exist, check if it needs to be broken.
@@ -122,7 +128,7 @@ public class MultidirectionalLeadingCamera : MonoBehaviour
             }
             //If floating bounds wasn't set update camera to target position with overshoot and target velocity.
             if (_floatingBounds == null)
-                goalX = _targetTransform.position.x + (_horizontalOvershoot * direction.x);
+                goalX = _targetTransform.position.x + (_horizontalOvershoot * horizontalDirection);
             else
                 goalX = transform.position.x;
 
@@ -156,7 +162,7 @@ public class MultidirectionalLeadingCamera : MonoBehaviour
             //Build camera goal using created values.            
             _cameraGoal = new Vector3(goalX, goalY, transform.position.z);
             //Update last direction and target position.
-            _lastTargetDirection = direction;
+            _lastHorizontalDirection = horizontalDirection;
             _lastTargetPosition = _targetTransform.position;
         }
 
@@ -173,13 +179,37 @@ public class MultidirectionalLeadingCamera : MonoBehaviour
         if (transform.position == goal)
             return;
 
-        /* Distance to meet goal is used as a multiplier so that the speed is increased
-         * further this transform is away from the goal. It's important to use a max value so that
-         * this transform doesn't crawl when very close to it's goal. */
-        float xDistance = Mathf.Max(1f, Mathf.Abs(goal.x - transform.position.x));
-        float nextX = Mathf.MoveTowards(transform.position.x, goal.x, _horizontalFollowRate * xDistance * _catchUpMultiplier * Time.deltaTime);
-
+        float nextX = Mathf.SmoothDamp(transform.position.x, goal.x, ref _lastTransformX, _currentSmoothTime);
         transform.position = new Vector3(nextX, goal.y, goal.z);
+        //Reduce smooth time.
+        _currentSmoothTime = Mathf.Max(_currentSmoothTime - (Time.deltaTime * _smoothDecreaseRate), _minimumSmoothTime);
+    }
+
+    /// <summary>
+    /// Sets the CurrentSmoothTime to the SmoothTimeBase.
+    /// </summary>
+    private void ResetSmoothTime()
+    {
+        _currentSmoothTime = _smoothTimeBase;
+        _lastTransformX = transform.position.x;
+    }
+
+    private float CubicEase(float percent)
+    {
+        /* If either of these values result will always be 
+         * the passed in value. */
+        if (percent == 0 || percent == 1)
+            return percent;
+
+        if (percent < 0.5f)
+        {
+            return percent;
+            //return percent * percent * percent * 0.5f;// Cubic equation then scale down to half size
+        }
+        else
+        {
+            return percent * percent * percent * 0.5f + 0.5f;// Same as above but inverted and shifted 
+        }
     }
 
     /// <summary>

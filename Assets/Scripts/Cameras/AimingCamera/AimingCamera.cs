@@ -57,23 +57,13 @@ public class AimingCamera : MonoBehaviour
     private Camera _camera;
     #endregion
 
-    CameraShaker shaker;
-
     private void Awake()
     {
-        shaker = GetComponent<CameraShaker>();
         _camera = GetComponent<Camera>();
         transform.position = new Vector3(_targetTransform.position.x, _targetTransform.position.y, transform.position.z);
     }
-
-    public float Duration = 1f;
-    public float Magnitude = 1f;
-    public float Violence = 1f;
     private void LateUpdate()
     {
-        if (Input.GetKeyDown(KeyCode.W))
-            shaker.GenerateShake(Duration, Magnitude, Violence);
-
         FollowTarget();
     }
 

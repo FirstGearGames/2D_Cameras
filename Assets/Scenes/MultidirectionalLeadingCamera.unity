@@ -273,14 +273,14 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _targetTransform: {fileID: 775721936}
-  _horizontalFollowRate: 3
-  _horizontalCatchUpRate: 7
   _horizontalFloatingWidth: 1.25
   _verticalViewportBounds:
     Minimum: 0.25
     Maximum: 0.75
-  _haltWithIdleTarget: 0
-  _horizontalOffset: 1
+  _horizontalOvershoot: 2
+  _smoothTimeBase: 0.5
+  _minimumSmoothTime: 0.05
+  _smoothDecreaseRate: 0.25
 --- !u!20 &519420031
 Camera:
   m_ObjectHideFlags: 0

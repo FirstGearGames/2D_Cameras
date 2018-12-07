@@ -278,8 +278,9 @@ MonoBehaviour:
   _overshoot: 3
   _useMaxOvershoot: 0
   Duration: 1
-  Magnitude: 1
-  Violence: 10
+  Magnitude: 2
+  Violence: 20
+  EaseOutPercent: 0.4
 --- !u!20 &519420031
 Camera:
   m_ObjectHideFlags: 0
